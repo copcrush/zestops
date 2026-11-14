@@ -1,0 +1,115 @@
+# ZestOps local development stack.
+#
+# First time:   node scripts/setup-local-env.mjs      (generates .env with local secrets)
+# Start:        docker compose up -d --build
+# Web app:      cd apps/web && npm install && npm run dev   ->  http://localhost:3000
+#
+# Services:
+#   postgres        PostgreSQL 17 (schemas: identity, payments, monitoring)
+#   migrate         one-shot: applies SQL migrations to zestops and zestops_test
+#   seed            one-shot: loads clearly-labelled LOCAL demo data
+#   payment-api     Go / Gin           http://localhost:8080
+#   monitoring-api  Python / FastAPI   http://localhost:8000
+
+name: zestops
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_OWNER_USER:-zestops_owner}
+      POSTGRES_PASSWORD: ${POSTGRES_OWNER_PASSWORD:?Run node scripts/setup-local-env.mjs first}
+      POSTGRES_DB: ${POSTGRES_DB:-zestops}
+      POSTGRES_TEST_DB: ${POSTGRES_TEST_DB:-zestops_test}
+      ZESTOPS_WEB_DB_PASSWORD: ${ZESTOPS_WEB_DB_PASSWORD:?Run node scripts/setup-local-env.mjs first}
+      ZESTOPS_PAYMENT_DB_PASSWORD: ${ZESTOPS_PAYMENT_DB_PASSWORD:?Run node scripts/setup-local-env.mjs first}
+      ZESTOPS_MONITORING_DB_PASSWORD: ${ZESTOPS_MONITORING_DB_PASSWORD:?Run node scripts/setup-local-env.mjs first}
+    ports:
+      # Bound to 127.0.0.1 so the database is not exposed to your local network.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./infra/database/bootstrap:/zestops/bootstrap:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    image: migrate/migrate:v4.20.1
+    entrypoint: ["/bin/sh", "/scripts/migrate.sh"]
+    command: ["up"]
+    environment:
+      MIGRATION_DATABASE_URLS: >-
+        postgres://${POSTGRES_OWNER_USER:-zestops_owner}:${POSTGRES_OWNER_PASSWORD}@postgres:5432/${POSTGRES_DB:-zestops}?sslmode=disable
+        postgres://${POSTGRES_OWNER_USER:-zestops_owner}:${POSTGRES_OWNER_PASSWORD}@postgres:5432/${POSTGRES_TEST_DB:-zestops_test}?sslmode=disable
+    volumes:
+      - ./infra/database/migrations:/migrations:ro
+      - ./infra/database/scripts:/scripts:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  seed:
+    image: postgres:17-alpine
+    entrypoint: ["/bin/sh", "/scripts/seed-local.sh"]
+    environment:
+      SEED_ENVIRONMENT: local
+      SEED_DATABASE_URL: postgres://${POSTGRES_OWNER_USER:-zestops_owner}:${POSTGRES_OWNER_PASSWORD}@postgres:5432/${POSTGRES_DB:-zestops}?sslmode=disable
+    volumes:
+      - ./infra/database/seeds:/seeds:ro
+      - ./infra/database/scripts:/scripts:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  payment-api:
+    build:
+      context: ./services/payment-api
+    restart: unless-stopped
+    environment:
+      APP_ENV: development
+      PORT: "8080"
+      LOG_LEVEL: info
+      DATABASE_URL: postgres://zestops_payment_app:${ZESTOPS_PAYMENT_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-zestops}?sslmode=disable
+      INTERNAL_JWT_ISSUER: ${INTERNAL_JWT_ISSUER:-zestops-web}
+      INTERNAL_JWT_AUDIENCE: zestops-payment-api
+      INTERNAL_JWT_PUBLIC_KEY_BASE64: ${INTERNAL_JWT_PUBLIC_KEY_BASE64:?Run node scripts/setup-local-env.mjs first}
+      RATE_LIMIT_REQUESTS_PER_MINUTE: "120"
+    ports:
+      - "127.0.0.1:${PAYMENT_API_PORT:-8080}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  monitoring-api:
+    build:
+      context: ./services/monitoring-api
+    restart: unless-stopped
+    environment:
+      APP_ENV: development
+      PORT: "8000"
+      LOG_LEVEL: INFO
+      DATABASE_URL: postgresql+asyncpg://zestops_monitoring_app:${ZESTOPS_MONITORING_DB_PASSWORD}@postgres:5432/${POSTGRES_DB:-zestops}
+      INTERNAL_JWT_ISSUER: ${INTERNAL_JWT_ISSUER:-zestops-web}
+      INTERNAL_JWT_AUDIENCE: zestops-monitoring-api
+      INTERNAL_JWT_PUBLIC_KEY_BASE64: ${INTERNAL_JWT_PUBLIC_KEY_BASE64:?Run node scripts/setup-local-env.mjs first}
+      # SSRF protection: only these origins may ever be monitored.
+      MONITORING_ALLOWED_TARGETS: http://payment-api:8080,http://monitoring-api:8000
+      # Docker service names resolve to private IPs, so allow them locally only.
+      MONITORING_ALLOW_PRIVATE_NETWORK_TARGETS: "true"
+      DEMO_ENDPOINTS_ENABLED: "true"
+      RATE_LIMIT_REQUESTS_PER_MINUTE: "120"
+    ports:
+      - "127.0.0.1:${MONITORING_API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
