@@ -71,6 +71,7 @@ services:
   payment-api:
     build:
       context: ./services/payment-api
+      secrets: [extra_ca_certificates]
     restart: unless-stopped
     environment:
       APP_ENV: development
@@ -90,6 +91,7 @@ services:
   monitoring-api:
     build:
       context: ./services/monitoring-api
+      secrets: [extra_ca_certificates]
     restart: unless-stopped
     environment:
       APP_ENV: development
@@ -113,3 +115,9 @@ services:
 
 volumes:
   postgres-data:
+
+secrets:
+  # Only needed behind a TLS-inspecting proxy: set EXTRA_CA_CERTIFICATES_FILE
+  # in .env to your proxy's CA bundle. By default an empty file is used.
+  extra_ca_certificates:
+    file: ${EXTRA_CA_CERTIFICATES_FILE:-./infra/docker/no-extra-ca-certificates.crt}
