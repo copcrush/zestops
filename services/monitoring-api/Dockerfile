@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ---------- build stage: install locked dependencies into a virtualenv ----------
-FROM python:3.13-slim AS build
+FROM python:3.15-slim AS build
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -19,7 +19,7 @@ RUN --mount=type=secret,id=extra_ca_certificates \
     && uv sync --frozen --no-dev --no-install-project
 
 # ---------- runtime stage: slim image, non-root user, no build tools ----------
-FROM python:3.13-slim AS runtime
+FROM python:3.15-slim AS runtime
 RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin appuser
 WORKDIR /app
 COPY --from=build /opt/venv /opt/venv
