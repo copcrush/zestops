@@ -32,6 +32,22 @@ jobs:
     environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check that the database was bootstrapped (STEP A)
+        env:
+          DATABASE_OWNER_URL: ${{ secrets.DATABASE_OWNER_URL }}
+        run: |
+          if [ -z "$DATABASE_OWNER_URL" ]; then
+            echo "::error::Secret DATABASE_OWNER_URL is not configured for this environment."
+            exit 1
+          fi
+          bootstrapped=$(psql "$DATABASE_OWNER_URL" -tAc \
+            "SELECT count(*) FROM pg_namespace WHERE nspname IN ('identity','payments','monitoring','zestops_migrations')")
+          database_name=$(psql "$DATABASE_OWNER_URL" -tAc "SELECT current_database()")
+          if [ "$bootstrapped" != "4" ]; then
+            echo "::error::Database '$database_name' is not bootstrapped (found $bootstrapped of 4 schemas). Run infra/database/bootstrap/bootstrap.sql (STEP A) on this same database first, then re-run this workflow."
+            exit 1
+          fi
+          echo "Database '$database_name' is bootstrapped."
       - name: Run migrations (${{ inputs.command }})
         env:
           MIGRATION_DATABASE_URLS: ${{ secrets.DATABASE_OWNER_URL }}
