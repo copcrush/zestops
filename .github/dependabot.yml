@@ -7,6 +7,17 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Major upgrades are deliberate, reviewed projects (not weekly bot PRs):
+      # - TypeScript 7 is a rewrite; Next.js 16 type-checking is validated on 5.x.
+      # - ESLint 10 must wait until eslint-config-next supports it.
+      # - @types/node must match the Node.js runtime major (22).
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: gomod
     directory: /services/payment-api
@@ -21,6 +32,11 @@ updates:
   - package-ecosystem: docker
     directories: [/services/payment-api, /services/monitoring-api]
     schedule: { interval: weekly, day: monday }
+    ignore:
+      # The Python version is pinned in pyproject.toml (3.13) and uv.lock; changing it
+      # is a deliberate upgrade of all three together, not a base-image bump.
+      - dependency-name: python
+        versions: [">=3.14"]
 
   - package-ecosystem: github-actions
     directory: /
