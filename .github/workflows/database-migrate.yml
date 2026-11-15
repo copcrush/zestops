@@ -1,0 +1,47 @@
+# Apply SQL migrations to a deployed database. Manual on purpose: schema changes
+# are a deliberate human step, never automatic on application start (ADR-0003).
+# Only "up" and "version" are possible; there is no reset or down migration here.
+name: Database migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub environment holding the DATABASE_OWNER_URL secret
+        type: choice
+        options: [production]
+        default: production
+      command:
+        description: "up = apply pending migrations, version = show current versions"
+        type: choice
+        options: [version, up]
+        default: version
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-migrate-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Environment protection rules (required reviewers) can gate this job.
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run migrations (${{ inputs.command }})
+        env:
+          MIGRATION_DATABASE_URLS: ${{ secrets.DATABASE_OWNER_URL }}
+        run: |
+          if [ -z "$MIGRATION_DATABASE_URLS" ]; then
+            echo "Secret DATABASE_OWNER_URL is not configured for this environment." >&2
+            exit 1
+          fi
+          docker run --rm \
+            -v "$PWD/infra/database/migrations:/migrations:ro" \
+            -v "$PWD/infra/database/scripts:/scripts:ro" \
+            -e MIGRATION_DATABASE_URLS \
+            --entrypoint /bin/sh migrate/migrate:v4.20.1 /scripts/migrate.sh "${{ inputs.command }}"

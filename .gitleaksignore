@@ -1,0 +1,4 @@
+# Reviewed gitleaks false positives (fingerprint = commit:file:rule:line).
+# Each entry is a deliberately fake value used only inside unit tests.
+768c8cc776266cad4d1b230164f88a86befbc872:apps/web/tests/unit/security-helpers.test.ts:generic-api-key:8
+768c8cc776266cad4d1b230164f88a86befbc872:apps/web/tests/unit/validation-schemas.test.ts:generic-api-key:17

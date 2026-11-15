@@ -5,7 +5,7 @@ import { createCsrfToken, isValidCsrfToken } from "@/features/auth/server/csrf";
 import { isSameOriginRequest } from "@/lib/server/route-handler";
 import { getSafeRedirectPath } from "@/lib/shared/safe-redirect";
 
-const SECRET = "test-secret-that-is-at-least-32-characters-long";
+const SECRET = "test-secret-that-is-at-least-32-characters-long"; // gitleaks:allow (fake test value)
 
 describe("CSRF tokens", () => {
   it("accepts the token issued for the same session", () => {

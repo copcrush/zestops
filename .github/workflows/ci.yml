@@ -1,0 +1,219 @@
+# Continuous Integration: lint, type checks, unit + integration tests (real
+# PostgreSQL), container builds and browser end-to-end tests.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege: CI only needs to read the code.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Throwaway credentials for the ephemeral PostgreSQL service container (not secrets).
+  CI_DB_OWNER_URL: postgres://zestops_owner:ci-owner-password@localhost:5432/zestops_test?sslmode=disable
+  REQUIRE_INTEGRATION_TESTS: "true"
+
+jobs:
+  web:
+    name: Web (lint, types, tests, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: zestops_owner
+          POSTGRES_PASSWORD: ci-owner-password
+          POSTGRES_DB: zestops_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U zestops_owner -d zestops_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    defaults:
+      run:
+        working-directory: apps/web
+    env:
+      TEST_DATABASE_URL: postgres://zestops_web_app:ci-web-password@localhost:5432/zestops_test
+      # Non-secret placeholders: the integration tests never sign tokens or call backends.
+      APP_ORIGIN: http://localhost:3000
+      PAYMENT_API_BASE_URL: http://localhost:8080
+      MONITORING_API_BASE_URL: http://localhost:8000
+      CSRF_SECRET: ci-only-csrf-secret-not-used-anywhere-else
+      INTERNAL_JWT_KEY_ID: ci
+      INTERNAL_JWT_PRIVATE_KEY_BASE64: placeholder-not-a-real-private-key-used-only-by-ci-tests
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Prepare test database
+        working-directory: .
+        run: infra/database/scripts/prepare-ci-database.sh
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type check
+        run: npm run typecheck
+      - name: Unit and integration tests (Vitest)
+        run: npm test
+      - name: Production build
+        run: npm run build
+
+  payment-api:
+    name: Payment API (Go)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: zestops_owner
+          POSTGRES_PASSWORD: ci-owner-password
+          POSTGRES_DB: zestops_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U zestops_owner -d zestops_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    defaults:
+      run:
+        working-directory: services/payment-api
+    env:
+      TEST_DATABASE_URL: postgres://zestops_payment_app:ci-payment-password@localhost:5432/zestops_test?sslmode=disable
+      TEST_OWNER_DATABASE_URL: postgres://zestops_owner:ci-owner-password@localhost:5432/zestops_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: services/payment-api/go.mod
+          cache-dependency-path: services/payment-api/go.sum
+      - name: Prepare test database
+        working-directory: .
+        run: infra/database/scripts/prepare-ci-database.sh
+      - name: Check formatting (gofmt)
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then echo "Run gofmt -w on:"; echo "$unformatted"; exit 1; fi
+      - name: Static analysis (go vet)
+        run: go vet ./...
+      - name: Tests (unit + integration, race detector)
+        run: go test -race -count=1 ./...
+      - name: Vulnerability check (govulncheck)
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  monitoring-api:
+    name: Monitoring API (Python)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: zestops_owner
+          POSTGRES_PASSWORD: ci-owner-password
+          POSTGRES_DB: zestops_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U zestops_owner -d zestops_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    defaults:
+      run:
+        working-directory: services/monitoring-api
+    env:
+      TEST_DATABASE_URL: postgresql+asyncpg://zestops_monitoring_app:ci-monitoring-password@localhost:5432/zestops_test
+      TEST_OWNER_DATABASE_URL: postgresql+asyncpg://zestops_owner:ci-owner-password@localhost:5432/zestops_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.32"
+          enable-cache: true
+          cache-dependency-glob: services/monitoring-api/uv.lock
+      - name: Prepare test database
+        working-directory: .
+        run: infra/database/scripts/prepare-ci-database.sh
+      - name: Install dependencies (locked)
+        run: uv sync --frozen
+      - name: Lint (ruff)
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Type check (mypy strict)
+        run: uv run mypy
+      - name: Tests (pytest)
+        run: uv run pytest
+      - name: Vulnerability check (pip-audit)
+        run: uv run pip-audit
+
+  containers:
+    name: Container images build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build payment-api image
+        run: docker build -t zestops-payment-api:ci services/payment-api
+      - name: Build monitoring-api image
+        run: docker build -t zestops-monitoring-api:ci services/monitoring-api
+      - name: Images run as non-root
+        run: |
+          test "$(docker image inspect zestops-payment-api:ci --format '{{.Config.User}}')" = "nonroot:nonroot"
+          test "$(docker image inspect zestops-monitoring-api:ci --format '{{.Config.User}}')" = "appuser"
+
+  e2e:
+    name: End-to-end (Playwright)
+    needs: [web, payment-api, monitoring-api]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Generate throwaway local secrets
+        run: node scripts/setup-local-env.mjs
+      - name: Start database, migrations and backends
+        run: |
+          docker compose up -d --build --wait postgres payment-api monitoring-api
+          docker compose run --rm seed
+      - name: Install web dependencies and browser
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Build and start the web app
+        working-directory: apps/web
+        run: |
+          npm run build
+          nohup npm start > ../../web-server.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            curl -sf http://localhost:3000/api/health && exit 0
+            sleep 2
+          done
+          echo "web app did not start"; cat ../../web-server.log; exit 1
+      - name: Run Playwright tests
+        working-directory: apps/web
+        env:
+          E2E_BASE_URL: http://localhost:3000
+        run: npx playwright test
+      - name: Service logs on failure
+        if: failure()
+        run: |
+          docker compose logs --no-color --tail 200
+          tail -n 200 web-server.log || true
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 7

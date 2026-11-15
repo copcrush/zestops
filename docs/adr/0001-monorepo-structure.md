@@ -27,6 +27,7 @@ owner has to learn without solving a present problem.
 ## Consequences
 
 - One clone, one CI configuration, atomic cross-service changes.
-- CI uses path filters so that a Go-only change does not rebuild the web app.
+- CI runs every job on each change (the repository is small, jobs run in parallel);
+  path filters can be added later if CI becomes slow.
 - Deployment platforms point at sub-directories (`apps/web` on Vercel, Docker
   contexts for the backends).

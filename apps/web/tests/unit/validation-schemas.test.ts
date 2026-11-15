@@ -14,7 +14,7 @@ const validPayment = {
   amount_minor: 1000,
   currency: "THB",
   payment_method: "card",
-  idempotency_key: "0b4f6a0e-5c5e-4a7b-9a51-3cfa2d39f0a1",
+  idempotency_key: "0b4f6a0e-5c5e-4a7b-9a51-3cfa2d39f0a1", // gitleaks:allow (random test UUID)
 };
 
 describe("createPaymentRequestSchema", () => {
