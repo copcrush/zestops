@@ -42,4 +42,4 @@ go test -run TestConcurrent -v ./tests/integration/
 3. Add the handler method; map new domain errors in `respondServiceError`.
 4. Add business logic in `internal/service`, SQL in `internal/repository`.
 5. Add tests: unit (validation/rules) + integration (`tests/integration`).
-6. Document it in `docs/api/payment-api.openapi.yaml`.
+6. Document it in `docs/api/README.md`.

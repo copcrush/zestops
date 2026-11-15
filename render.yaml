@@ -1,0 +1,67 @@
+# Render Blueprint for the two ZestOps backends (Docker, free plan).
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Secrets use `sync: false`: Render asks for the value when the Blueprint is first
+# applied and never stores it in git. See docs/runbooks/DEPLOYMENT.md.
+#
+# autoDeployTrigger: checksPass -> Render deploys a new commit on main only after the
+# GitHub checks (CI) pass, so there is exactly one deployment trigger per service.
+
+services:
+  - type: web
+    name: zestops-payment-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerContext: ./services/payment-api
+    dockerfilePath: ./services/payment-api/Dockerfile
+    healthCheckPath: /health/ready
+    branch: main
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: RATE_LIMIT_REQUESTS_PER_MINUTE
+        value: "120"
+      - key: INTERNAL_JWT_ISSUER
+        value: zestops-web
+      - key: INTERNAL_JWT_AUDIENCE
+        value: zestops-payment-api
+      - key: DATABASE_URL # Neon, role zestops_payment_app, sslmode=require
+        sync: false
+      - key: INTERNAL_JWT_PUBLIC_KEY_BASE64
+        sync: false
+
+  - type: web
+    name: zestops-monitoring-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerContext: ./services/monitoring-api
+    dockerfilePath: ./services/monitoring-api/Dockerfile
+    healthCheckPath: /health/ready
+    branch: main
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: RATE_LIMIT_REQUESTS_PER_MINUTE
+        value: "120"
+      - key: INTERNAL_JWT_ISSUER
+        value: zestops-web
+      - key: INTERNAL_JWT_AUDIENCE
+        value: zestops-monitoring-api
+      - key: MONITORING_ALLOW_PRIVATE_NETWORK_TARGETS
+        value: "false"
+      - key: DEMO_ENDPOINTS_ENABLED
+        value: "true"
+      - key: DATABASE_URL # Neon, postgresql+asyncpg://zestops_monitoring_app...?ssl=require
+        sync: false
+      - key: INTERNAL_JWT_PUBLIC_KEY_BASE64
+        sync: false
+      - key: MONITORING_ALLOWED_TARGETS # the two public backend origins (https://...onrender.com)
+        sync: false

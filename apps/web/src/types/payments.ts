@@ -1,4 +1,4 @@
-/** Types mirroring the Go Payment API JSON (see docs/api/payment-api.openapi.yaml). */
+/** Types mirroring the Go Payment API JSON (see docs/api/README.md). */
 export type PaymentStatus = "pending" | "processing" | "succeeded" | "failed" | "cancelled";
 export type PaymentMethod = "card" | "bank_transfer" | "promptpay" | "e_wallet";
 
