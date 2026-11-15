@@ -17,7 +17,8 @@ import pg from "pg";
 
 const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const setupFile = join(repositoryRoot, ".secrets", "production-setup.txt");
-const step = (process.argv[2] ?? "").toUpperCase();
+// Skip a literal "--" (some package managers pass it through to the script).
+const step = (process.argv.slice(2).find((argument) => argument !== "--") ?? "").toUpperCase();
 const SEPARATOR = "=".repeat(78);
 const BOOTSTRAP_SCHEMAS = ["identity", "payments", "monitoring", "zestops_migrations"];
 
