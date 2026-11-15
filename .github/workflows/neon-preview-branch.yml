@@ -1,0 +1,87 @@
+# One Neon database branch per pull request (based on Neon's GitHub integration
+# template), adapted to ZestOps rules:
+#  - actions pinned to commit SHAs, least-privilege permissions per job
+#  - branch named from the PR number (no third-party "branch-names" action)
+#  - ZestOps SQL migrations are applied to the preview branch, and a schema diff
+#    is posted to the PR, so schema changes are reviewed before they reach production
+#  - skipped for forks and Dependabot (they do not receive repository secrets) and
+#    until the repository is configured:
+#      Settings > Secrets and variables > Actions
+#        Variables: NEON_PROJECT_ID   Secrets: NEON_API_KEY
+#
+# The connection URL is never printed. Preview branches expire after 14 days and
+# are deleted when the PR closes.
+name: Neon preview branch
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  create-neon-branch:
+    name: Create Neon branch and apply migrations
+    if: >-
+      vars.NEON_PROJECT_ID != ''
+      && github.event.action != 'closed'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write # schema diff comment
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Branch expiry (14 days from now)
+        run: echo "EXPIRES_AT=$(date -u --date '+14 days' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Create Neon branch
+        id: create_neon_branch
+        uses: neondatabase/create-branch-action@72ed4f69a12b6be9c16aebfad893f6a21e9aba8b # v6.4.0
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch_name: preview/pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+          expires_at: ${{ env.EXPIRES_AT }}
+
+      - name: Apply ZestOps migrations to the preview branch
+        env:
+          # Owner role on the branch (direct, not pooled). migrate.sh never prints it.
+          MIGRATION_DATABASE_URLS: ${{ steps.create_neon_branch.outputs.db_url }}
+        run: |
+          docker run --rm \
+            -v "$PWD/infra/database/migrations:/migrations:ro" \
+            -v "$PWD/infra/database/scripts:/scripts:ro" \
+            -e MIGRATION_DATABASE_URLS \
+            --entrypoint /bin/sh migrate/migrate:v4.20.1 /scripts/migrate.sh up
+
+      - name: Post schema diff to the pull request
+        uses: neondatabase/schema-diff-action@80cfa8521628e890015b60f5291a7738926617dc # v1.0.1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          compare_branch: preview/pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+  delete-neon-branch:
+    name: Delete Neon branch
+    if: >-
+      vars.NEON_PROJECT_ID != ''
+      && github.event.action == 'closed'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Delete Neon branch
+        uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3.2.1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: preview/pr-${{ github.event.number }}
+          api_key: ${{ secrets.NEON_API_KEY }}

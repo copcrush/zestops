@@ -31,7 +31,10 @@ if [ -z "${MIGRATION_DATABASE_URLS:-}" ]; then
   exit 2
 fi
 
-for database_url in $MIGRATION_DATABASE_URLS; do
+for raw_database_url in $MIGRATION_DATABASE_URLS; do
+  # Neon (and others) add "channel_binding=require" to copied connection strings.
+  # The migrate tool's driver does not understand it, so remove that parameter.
+  database_url=$(echo "$raw_database_url" | sed -E 's/channel_binding=[^&]*&?//; s/[?&]$//')
   case "$database_url" in
     *\?*) separator="&" ;;
     *) separator="?" ;;
@@ -43,6 +46,13 @@ for database_url in $MIGRATION_DATABASE_URLS; do
     # Each schema keeps its own history table: zestops_migrations.<schema>
     tracking_table="x-migrations-table=%22zestops_migrations%22.%22${schema}%22&x-migrations-table-quoted=1"
     echo "==> [$database_name] $schema: $command_name"
+    if [ "$command_name" = "version" ]; then
+      # On a brand-new database there is no version yet; that is not an error.
+      migrate -path "$migrations_dir/$schema" \
+        -database "${database_url}${separator}${tracking_table}" version 2>&1 \
+        | sed 's/^error: no migration$/no migrations applied yet/'
+      continue
+    fi
     migrate -path "$migrations_dir/$schema" \
       -database "${database_url}${separator}${tracking_table}" \
       "$command_name"

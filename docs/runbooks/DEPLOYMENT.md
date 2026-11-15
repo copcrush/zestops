@@ -22,62 +22,66 @@ not claim 24/7 monitoring on this setup.
 - GitHub repository `copcrush/zestops` with CI green on `main`.
 - Accounts: Vercel, Render, Neon (all sign in with GitHub).
 
-## 1. Generate production secrets (never reuse local ones)
+## 1. Neon project
 
-On your own computer (not in CI, not in chat):
+1. Sign in to [Neon](https://neon.com) with GitHub and create a project (ZestOps uses
+   project `zestops`, region AWS Asia Pacific (Singapore), default database `neondb`).
+2. Neon Console → **Connect** → role `neondb_owner` → copy the connection string.
+   Keep it private: it is the owner credential and is only used for setup and migrations.
 
-```bash
-node -e "const {generateKeyPairSync,randomBytes}=require('crypto');const {publicKey,privateKey}=generateKeyPairSync('ed25519');const b=(s)=>Buffer.from(s).toString('base64');console.log('INTERNAL_JWT_PUBLIC_KEY_BASE64='+b(publicKey.export({type:'spki',format:'pem'})));console.log('INTERNAL_JWT_PRIVATE_KEY_BASE64='+b(privateKey.export({type:'pkcs8',format:'pem'})));console.log('CSRF_SECRET='+randomBytes(32).toString('base64url'));console.log('INTERNAL_JWT_KEY_ID=prod-'+new Date().toISOString().slice(0,10))"
-```
-
-Store them in a password manager. The **private key goes only to Vercel**; the public key
-goes to both Render services.
-
-## 2. Database (Neon)
-
-1. Create a project (region close to the backends, e.g. Singapore), database `zestops`.
-2. Note the owner connection string (role `neondb_owner` or similar) — used only for
-   bootstrap and migrations.
-3. Bootstrap schemas and least-privilege roles (choose three strong passwords). From the
-   repository root, using Docker so no local `psql` is needed (works on Windows and macOS):
+## 2. Generate all production secrets and the setup SQL (on your computer)
 
 ```bash
-docker run --rm -v "$(pwd)/infra/database/bootstrap:/bootstrap:ro" postgres:17-alpine psql "<OWNER_URL>?sslmode=require" -v web_app_password='...' -v payment_app_password='...' -v monitoring_app_password='...' -f /bootstrap/bootstrap.sql
+cd apps/web
 ```
-
-   On Windows PowerShell replace `$(pwd)` with `${PWD}`. With a local `psql`, the same
-   command works without Docker (`-f infra/database/bootstrap/bootstrap.sql`).
-
-4. In GitHub → Settings → Environments → create `production` (optionally with required
-   reviewers) and add secret `DATABASE_OWNER_URL` = owner URL with `?sslmode=require`.
-5. GitHub → Actions → **Database migrate** → Run workflow → `command: version`, then
-   `command: up`.
-6. Create the first admin user (from your computer):
 
 ```bash
-cd apps/web && DATABASE_URL="<web role URL>?sslmode=require" NEW_USER_PASSWORD='<long passphrase>' npm run users:create -- --email you@example.com --name "Your Name" --role admin
+npm install
 ```
-
-Do **not** run the local seed files against production.
-
-7. Create the **public guest (read-only) account** used by the "Explore as guest" button
-   (owner decision: public viewer demo). Use a long random password that nobody needs to
-   know — visitors never type it:
 
 ```bash
-cd apps/web && DATABASE_URL="<web role URL>?sslmode=require" NEW_USER_PASSWORD="$(node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))")" npm run users:create -- --email guest@zestops.demo --name "Guest Viewer" --role viewer
+npm run setup:production
 ```
 
-The guest account must have role `viewer`; the app refuses to start a guest session for
-any other role, and blocks profile/password/session changes for it.
+The script asks three questions (the Neon connection string, your admin e-mail, your
+display name) and writes **`.secrets/production-setup.txt`** (git-ignored). It contains:
 
-Connection strings per service (use Neon's **pooled** host for the web app):
+- your admin login (random password; change it later in Settings),
+- **STEP A** — SQL for the Neon SQL Editor: schemas + three least-privilege roles,
+- **STEP B** — the GitHub secret `DATABASE_OWNER_URL` for the migration workflow,
+- **STEP C** — SQL for the Neon SQL Editor: your admin user + the read-only guest user,
+- the exact `DATABASE_URL`, JWT keys and other values for Render and Vercel.
 
-| Service | Variable | Format |
-|---|---|---|
-| Web (Vercel) | `DATABASE_URL` | `postgres://zestops_web_app:<pw>@<pooled-host>/zestops?sslmode=require` |
-| Payment API | `DATABASE_URL` | `postgres://zestops_payment_app:<pw>@<host>/zestops?sslmode=require` |
-| Monitoring API | `DATABASE_URL` | `postgresql+asyncpg://zestops_monitoring_app:<pw>@<host>/zestops?ssl=require` |
+Then:
+
+1. **STEP A:** Neon Console → SQL Editor → paste → **Run**.
+2. **STEP B:** GitHub → Settings → Environments → **New environment** `production` →
+   **Add environment secret** `DATABASE_OWNER_URL`. Then Actions → **Database migrate** →
+   **Run workflow** → environment `production`, command `up`. Wait for the green check.
+3. **STEP C:** Neon SQL Editor → paste → **Run** (shows two users: admin and viewer).
+4. Copy everything into a password manager and **delete** `.secrets/production-setup.txt`.
+
+Notes:
+
+- Connection strings copied from Neon contain `channel_binding=require`; the migration
+  script removes it automatically, and the generated service URLs do not use it.
+- The SQL only creates objects that do not exist yet, so running it twice is safe.
+- Never run the local seed files against production.
+- Manual alternative (instead of the script): run `infra/database/bootstrap/bootstrap.sql`
+  with `psql -v ...` and create users with `npm run users:create` (see the script header).
+
+## Optional: Neon preview branch per pull request
+
+`.github/workflows/neon-preview-branch.yml` creates a Neon branch for each pull request,
+applies the migrations to it and posts a schema diff; the branch is deleted when the PR
+closes (and expires after 14 days). It stays inactive until you add, in GitHub →
+Settings → Secrets and variables → Actions:
+
+- Variable `NEON_PROJECT_ID` = your Neon project ID (for example `hidden-tree-58545671`)
+- Secret `NEON_API_KEY` = a Neon API key (project-scoped is enough)
+
+Preview branches are copies of the production branch, including its data. That is fine
+for ZestOps (simulated data only) but would need care in a real product.
 
 ## 3. Backends (Render Blueprint)
 

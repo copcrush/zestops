@@ -39,17 +39,28 @@ REVOKE ALL ON SCHEMA zestops_migrations FROM PUBLIC;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 
 -- ------------------------------------------------------------------ roles ---
--- CREATE ROLE has no IF NOT EXISTS, so generate the statement only when needed.
-SELECT 'CREATE ROLE zestops_web_app LOGIN'
-WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'zestops_web_app')\gexec
-SELECT 'CREATE ROLE zestops_payment_app LOGIN'
-WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'zestops_payment_app')\gexec
-SELECT 'CREATE ROLE zestops_monitoring_app LOGIN'
-WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'zestops_monitoring_app')\gexec
+-- CREATE ROLE has no IF NOT EXISTS, so check first. (Plain SQL, no psql-only
+-- commands, so the same file also works in a web SQL editor such as Neon's.)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'zestops_web_app') THEN
+    CREATE ROLE zestops_web_app LOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'zestops_payment_app') THEN
+    CREATE ROLE zestops_payment_app LOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'zestops_monitoring_app') THEN
+    CREATE ROLE zestops_monitoring_app LOGIN;
+  END IF;
+END
+$$;
 
-ALTER ROLE zestops_web_app        WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'web_app_password';
-ALTER ROLE zestops_payment_app    WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'payment_app_password';
-ALTER ROLE zestops_monitoring_app WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :'monitoring_app_password';
+-- New roles are already NOSUPERUSER, NOCREATEDB and NOCREATEROLE by default. We do not
+-- repeat those attributes: managed PostgreSQL (Neon, ...) does not give the owner
+-- superuser rights, and only a superuser may even mention the SUPERUSER attribute.
+ALTER ROLE zestops_web_app        WITH LOGIN PASSWORD :'web_app_password';
+ALTER ROLE zestops_payment_app    WITH LOGIN PASSWORD :'payment_app_password';
+ALTER ROLE zestops_monitoring_app WITH LOGIN PASSWORD :'monitoring_app_password';
 
 -- Each role sees only its own schema by default.
 ALTER ROLE zestops_web_app        SET search_path = identity;
