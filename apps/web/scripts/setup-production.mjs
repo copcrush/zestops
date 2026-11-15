@@ -101,6 +101,19 @@ function parseOwnerUrl(ownerUrl) {
   };
 }
 
+/** First statement of every pasted SQL block: stops if the SQL Editor points at another database. */
+function buildDatabaseGuardSql(databaseName) {
+  return `-- Safety check: stop if the SQL Editor is connected to the wrong database.
+DO $$
+BEGIN
+  IF current_database() <> ${sqlLiteral(databaseName)} THEN
+    RAISE EXCEPTION 'Wrong database: %. Select database ${databaseName.replaceAll("'", "''")} in the SQL Editor and run again.', current_database();
+  END IF;
+END
+$$;
+`;
+}
+
 function buildBootstrapSql(rolePasswords) {
   const template = readFileSync(join(repositoryRoot, "infra/database/bootstrap/bootstrap.sql"), "utf8");
   return template
@@ -141,7 +154,8 @@ async function main() {
   const paymentDatabaseUrl = `postgres://zestops_payment_app:${rolePasswords.payment}@${database.directHost}/${database.databaseName}?sslmode=require`;
   const monitoringDatabaseUrl = `postgresql+asyncpg://zestops_monitoring_app:${rolePasswords.monitoring}@${database.directHost}/${database.databaseName}?ssl=require`;
 
-  const usersSql = `INSERT INTO identity.users (email, display_name, password_hash, role) VALUES
+  const usersSql = `${buildDatabaseGuardSql(database.databaseName)}
+INSERT INTO identity.users (email, display_name, password_hash, role) VALUES
   (${sqlLiteral(answers.adminEmail)}, ${sqlLiteral(answers.adminName)}, ${sqlLiteral(await hashPassword(adminPassword))}, 'admin'),
   (${sqlLiteral(GUEST_EMAIL)}, 'Guest Viewer', ${sqlLiteral(await hashPassword(guestPassword))}, 'viewer')
 ON CONFLICT (lower(email)) DO NOTHING;
@@ -160,9 +174,11 @@ E-mail:   ${answers.adminEmail}
 Password: ${adminPassword}
 
 ${line}
-STEP A — Neon SQL Editor: paste EVERYTHING between the lines and click "Run"
+STEP A — Neon SQL Editor: select database "${database.databaseName}" (top of the editor),
+paste EVERYTHING between the lines and click "Run"
 (creates the 3 schemas and 3 least-privilege database users)
 ${line}
+${buildDatabaseGuardSql(database.databaseName)}
 ${buildBootstrapSql(rolePasswords)}
 ${line}
 
@@ -177,7 +193,7 @@ Value: ${ownerUrl}
 Then: Actions > "Database migrate" > Run workflow > environment: production, command: up
 
 ${line}
-STEP C — Neon SQL Editor again (AFTER step B is green): paste and click "Run"
+STEP C — Neon SQL Editor again, database "${database.databaseName}" (AFTER step B is green): paste and click "Run"
 (creates your admin account and the read-only guest account)
 ${line}
 ${usersSql}
