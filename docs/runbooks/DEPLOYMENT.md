@@ -54,8 +54,18 @@ psql "<OWNER_URL>?sslmode=require" -v web_app_password='...' -v payment_app_pass
 cd apps/web && DATABASE_URL="<web role URL>?sslmode=require" NEW_USER_PASSWORD='<long passphrase>' npm run users:create -- --email you@example.com --name "Your Name" --role admin
 ```
 
-Do **not** run the local seed files against production. Optionally create a public
-read-only demo viewer the same way with `--role viewer`.
+Do **not** run the local seed files against production.
+
+7. Create the **public guest (read-only) account** used by the "Explore as guest" button
+   (owner decision: public viewer demo). Use a long random password that nobody needs to
+   know — visitors never type it:
+
+```bash
+cd apps/web && DATABASE_URL="<web role URL>?sslmode=require" NEW_USER_PASSWORD="$(node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))")" npm run users:create -- --email guest@zestops.demo --name "Guest Viewer" --role viewer
+```
+
+The guest account must have role `viewer`; the app refuses to start a guest session for
+any other role, and blocks profile/password/session changes for it.
 
 Connection strings per service (use Neon's **pooled** host for the web app):
 
@@ -95,6 +105,7 @@ Connection strings per service (use Neon's **pooled** host for the web app):
 | `INTERNAL_JWT_KEY_ID` | from step 1 |
 | `INTERNAL_JWT_PRIVATE_KEY_BASE64` | from step 1 (Vercel **only**) |
 | `SESSION_IDLE_TIMEOUT_MINUTES` / `SESSION_ABSOLUTE_TIMEOUT_HOURS` | `30` / `8` |
+| `PUBLIC_DEMO_VIEWER_EMAIL` | `guest@zestops.demo` (enables the "Explore as guest" button; omit to disable) |
 
 4. Deploy. Vercel then deploys every push to `main` (production) and every PR (preview).
    Preview deployments have a different origin; give them their own `APP_ORIGIN` or keep

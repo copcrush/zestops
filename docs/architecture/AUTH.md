@@ -17,6 +17,15 @@ ZestOps uses **application-managed authentication with a Backend-for-Frontend**
 The permission map lives in `apps/web/src/features/auth/permissions.ts` (UI + BFF)
 and is enforced again in each backend (`RequireRole` in Go, `AdminPrincipal` in Python).
 
+## Public guest demo
+
+If `PUBLIC_DEMO_VIEWER_EMAIL` is set, the login page shows **Explore as guest
+(read-only)**. `POST /api/auth/demo` (same-origin only, rate-limited per IP) starts a normal
+server-side session for that account **only if its role is `viewer`**. The shared guest
+account cannot change its display name or password, and cannot sign out other sessions
+(`403 DEMO_ACCOUNT_READ_ONLY`), so one visitor cannot lock out the others. Guests only see
+their own session in Settings. Code: `apps/web/src/features/auth/server/demo-access.ts`.
+
 ## Login flow
 
 ```mermaid

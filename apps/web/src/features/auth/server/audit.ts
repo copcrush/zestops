@@ -14,7 +14,9 @@ export type AuditEventType =
   | "profile_updated"
   | "other_sessions_revoked"
   | "access_denied"
-  | "csrf_rejected";
+  | "csrf_rejected"
+  | "demo_login_succeeded"
+  | "demo_login_rejected";
 
 /**
  * Write a security audit event (database + structured log).

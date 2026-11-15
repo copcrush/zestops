@@ -10,6 +10,9 @@ export async function signIn(page: Page, account: { email: string; password: str
   await page.getByLabel("Password").fill(account.password);
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).not.toHaveURL(/\/login/);
+  // Wait until the new page has hydrated: clicking a button before React attaches
+  // its handlers does nothing (this caused a flaky logout test).
+  await page.waitForLoadState("networkidle");
 }
 
 /** Reads the CSRF token from the page's server-rendered payload (to call the BFF directly in tests). */

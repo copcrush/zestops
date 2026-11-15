@@ -3,8 +3,10 @@ import { redirect } from "next/navigation";
 
 import { Logo } from "@/components/layout/logo";
 import { Alert } from "@/components/ui/feedback";
+import { DemoLoginButton } from "@/features/auth/components/demo-login-button";
 import { LoginForm } from "@/features/auth/components/login-form";
 import { getCurrentSession } from "@/features/auth/server/current-session";
+import { isPublicDemoEnabled } from "@/features/auth/server/demo-access";
 import { getServerEnvironment } from "@/lib/server/env";
 import { getSafeRedirectPath } from "@/lib/shared/safe-redirect";
 
@@ -62,6 +64,16 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           <div className="mt-6 rounded-brutal border-2 border-ink bg-white p-6 shadow-brutal-lg">
             <LoginForm redirectPath={redirectPath} />
           </div>
+
+          {isPublicDemoEnabled() ? (
+            <div className="mt-6 rounded-brutal border-2 border-ink bg-nova/40 p-5 shadow-brutal">
+              <p className="font-bold">Just looking around?</p>
+              <p className="mb-4 mt-1 text-sm">
+                Explore the dashboard with a shared read-only viewer account. No sign-up needed.
+              </p>
+              <DemoLoginButton />
+            </div>
+          ) : null}
 
           {showLocalDemoAccounts ? (
             <div className="mt-6 rounded-brutal border-2 border-dashed border-ink bg-lemon-soft p-4 text-sm">

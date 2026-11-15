@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
+import { Alert } from "@/components/ui/feedback";
+import { isDemoAccount } from "@/features/auth/server/demo-access";
 import { PageHeader } from "@/components/ui/page-header";
 import { requireSession } from "@/features/auth/server/current-session";
 import { listActiveSessions } from "@/features/auth/server/session";
@@ -24,10 +26,16 @@ export default async function SettingsPage() {
   const session = await requireSession();
   const { user } = session;
   const activeSessions = await listActiveSessions(user.id, session.sessionId);
+  const isGuest = isDemoAccount(user.email);
 
   return (
     <>
       <PageHeader eyebrow="Settings" title="Profile & security" description="Manage your profile, password and signed-in devices." />
+      {isGuest ? (
+        <Alert tone="info" title="You are using the shared guest account" className="mb-6">
+          It is read-only so every visitor gets the same experience: profile, password and sessions cannot be changed.
+        </Alert>
+      ) : null}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader title="Profile" />
@@ -38,19 +46,19 @@ export default async function SettingsPage() {
               <div><dt className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-muted">Last sign-in</dt><dd className="mt-0.5">{formatDateTime(user.lastLoginAt)}</dd></div>
               <div><dt className="font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-muted">Session expires</dt><dd className="mt-0.5">{formatDateTime(session.absoluteExpiresAt)}</dd></div>
             </dl>
-            <DisplayNameForm />
+            {isGuest ? null : <DisplayNameForm />}
           </CardBody>
         </Card>
         <Card>
           <CardHeader title="Password" description="Changing it signs out all your other sessions." />
-          <CardBody><ChangePasswordForm /></CardBody>
+          <CardBody>{isGuest ? <p className="text-sm text-muted">Not available for the guest account.</p> : <ChangePasswordForm />}</CardBody>
         </Card>
       </div>
       <Card className="mt-6">
         <CardHeader title="Active sessions" description="Sessions expire after inactivity and after a maximum lifetime."
-                    actions={<RevokeOtherSessionsButton otherSessionCount={activeSessions.filter((activeSession) => !activeSession.isCurrent).length} />} />
+                    actions={isGuest ? null : <RevokeOtherSessionsButton otherSessionCount={activeSessions.filter((activeSession) => !activeSession.isCurrent).length} />} />
         <ul className="divide-y divide-ink/15">
-          {activeSessions.map((activeSession) => (
+          {(isGuest ? activeSessions.filter((activeSession) => activeSession.isCurrent) : activeSessions).map((activeSession) => (
             <li key={activeSession.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
               <div className="flex items-center gap-3">
                 <span className="grid size-9 place-items-center rounded-lg border-2 border-ink bg-sky"><Monitor aria-hidden className="size-4" /></span>

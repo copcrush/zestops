@@ -1,3 +1,5 @@
+import { demoAccountReadOnlyResponse } from "@/features/profile/server/demo-guard";
+import { isDemoAccount } from "@/features/auth/server/demo-access";
 import { NextResponse } from "next/server";
 
 import { changePassword } from "@/features/profile/server/profile";
@@ -7,6 +9,9 @@ import { changePasswordRequestSchema } from "@/lib/shared/validation-schemas";
 
 /** POST /api/profile/password — change password (requires the current password). */
 export const POST = protectedRoute({}, async ({ request, session, correlationId }) => {
+  if (isDemoAccount(session.user.email)) {
+    return demoAccountReadOnlyResponse(correlationId);
+  }
   const passwords = await parseJsonBody(request, changePasswordRequestSchema);
   const result = await changePassword(session.user.id, session.sessionId, passwords.current_password,
     passwords.new_password, getClientIpAddress(request.headers), correlationId);

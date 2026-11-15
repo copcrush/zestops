@@ -21,6 +21,8 @@ const environmentSchema = z.object({
   SESSION_ABSOLUTE_TIMEOUT_HOURS: z.coerce.number().int().min(1).max(7 * 24).default(8),
   // Sign-in attempts allowed per client IP per 15 minutes (raise only for local E2E testing).
   LOGIN_ATTEMPTS_PER_IP_PER_WINDOW: z.coerce.number().int().min(1).max(10_000).default(20),
+  // Optional public "explore as guest" button. Must be the e-mail of a VIEWER account.
+  PUBLIC_DEMO_VIEWER_EMAIL: z.email().optional().or(z.literal("").transform(() => undefined)),
 });
 
 export type ServerEnvironment = z.infer<typeof environmentSchema>;

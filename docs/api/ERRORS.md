@@ -30,6 +30,7 @@ the same envelope:
 | 403 | `FORBIDDEN` | all | Authenticated, but the role lacks permission |
 | 403 | `CSRF_TOKEN_INVALID` | BFF | Missing or wrong `X-CSRF-Token` |
 | 403 | `CROSS_ORIGIN_REQUEST` | BFF | `Origin` is not this app |
+| 403 | `DEMO_ACCOUNT_READ_ONLY` | BFF | The shared guest account tried to change its profile, password or sessions |
 | 404 | `NOT_FOUND` | all | Unknown route |
 | 404 | `PAYMENT_NOT_FOUND` / `SERVICE_NOT_FOUND` / `INCIDENT_NOT_FOUND` | backends | Resource does not exist |
 | 405 | `METHOD_NOT_ALLOWED` | backends | Wrong HTTP method |

@@ -14,6 +14,7 @@ State-changing calls require the session cookie, `X-CSRF-Token`, and a same-orig
 | Method | Path | Permission | Purpose |
 |---|---|---|---|
 | POST | `/api/auth/login` | — (Origin check) | `{email, password}` → sets session cookie |
+| POST | `/api/auth/demo` | — (Origin check) | Start a read-only guest session (only if `PUBLIC_DEMO_VIEWER_EMAIL` is set) |
 | POST | `/api/auth/logout` | signed in | Revoke session, clear cookie |
 | GET | `/api/health` | — | Web liveness |
 | POST | `/api/payments` | createPayment | Create payment (`idempotency_key` in body, forwarded as header) |
