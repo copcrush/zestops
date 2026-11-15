@@ -66,6 +66,16 @@ jobs:
             exit 1
           fi
           echo "Database '$database_name' is bootstrapped."
+          # Non-secret diagnostics: which role connects, and who owns each schema.
+          psql "$DATABASE_OWNER_URL" -tAc "SELECT 'Connected as role: ' || current_user"
+          psql "$DATABASE_OWNER_URL" -tAc \
+            "SELECT 'Schema ' || nspname || ' owned by ' || pg_get_userbyid(nspowner) || CASE WHEN has_schema_privilege(nspname, 'CREATE') THEN ' (CREATE ok)' ELSE ' (NO CREATE privilege)' END FROM pg_namespace WHERE nspname IN ('identity','payments','monitoring','zestops_migrations') ORDER BY 1"
+          missing=$(psql "$DATABASE_OWNER_URL" -tAc \
+            "SELECT count(*) FROM pg_namespace WHERE nspname IN ('identity','payments','monitoring','zestops_migrations') AND NOT has_schema_privilege(nspname, 'CREATE')")
+          if [ "$missing" != "0" ]; then
+            echo "::error::The role in DATABASE_OWNER_URL cannot create objects in $missing schema(s). STEP A must be run with the SAME role as this secret (see the lines above)."
+            exit 1
+          fi
       - name: Run migrations (${{ inputs.command }})
         run: |
           export MIGRATION_DATABASE_URLS="$DATABASE_OWNER_URL"
