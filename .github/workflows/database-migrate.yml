@@ -32,14 +32,32 @@ jobs:
     environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Check that the database was bootstrapped (STEP A)
+      - name: Normalize and validate DATABASE_OWNER_URL (never printed)
         env:
-          DATABASE_OWNER_URL: ${{ secrets.DATABASE_OWNER_URL }}
+          RAW_DATABASE_OWNER_URL: ${{ secrets.DATABASE_OWNER_URL }}
         run: |
-          if [ -z "$DATABASE_OWNER_URL" ]; then
-            echo "::error::Secret DATABASE_OWNER_URL is not configured for this environment."
+          # Tolerate common copy/paste mistakes: "Value:" prefix, quotes, spaces, CR/LF.
+          cleaned=$(printf '%s' "$RAW_DATABASE_OWNER_URL" | tr -d '\r\n' \
+            | sed -E 's/^[[:space:]]*(Value:)?[[:space:]]*//; s/[[:space:]]+$//; s/^["'\'']//; s/["'\'']$//')
+          if [ -z "$cleaned" ]; then
+            echo "::error::Secret DATABASE_OWNER_URL is empty or not configured for this environment."
             exit 1
           fi
+          echo "::add-mask::$cleaned"
+          case "$cleaned" in
+            postgresql://*|postgres://*) ;;
+            *)
+              echo "::error::DATABASE_OWNER_URL must start with postgresql:// (it starts with '$(printf '%s' "$cleaned" | cut -c1-6 | sed 's/[^A-Za-z:/]/?/g')...', length ${#cleaned}). Paste only the text from postgresql:// to sslmode=require."
+              exit 1
+              ;;
+          esac
+          case "$cleaned" in
+            *" "*) echo "::error::DATABASE_OWNER_URL contains a space. Paste it again as one line."; exit 1 ;;
+          esac
+          echo "DATABASE_OWNER_URL=$cleaned" >> "$GITHUB_ENV"
+          echo "Secret looks like a PostgreSQL URL (length ${#cleaned})."
+      - name: Check that the database was bootstrapped (STEP A)
+        run: |
           bootstrapped=$(psql "$DATABASE_OWNER_URL" -tAc \
             "SELECT count(*) FROM pg_namespace WHERE nspname IN ('identity','payments','monitoring','zestops_migrations')")
           database_name=$(psql "$DATABASE_OWNER_URL" -tAc "SELECT current_database()")
@@ -49,13 +67,8 @@ jobs:
           fi
           echo "Database '$database_name' is bootstrapped."
       - name: Run migrations (${{ inputs.command }})
-        env:
-          MIGRATION_DATABASE_URLS: ${{ secrets.DATABASE_OWNER_URL }}
         run: |
-          if [ -z "$MIGRATION_DATABASE_URLS" ]; then
-            echo "Secret DATABASE_OWNER_URL is not configured for this environment." >&2
-            exit 1
-          fi
+          export MIGRATION_DATABASE_URLS="$DATABASE_OWNER_URL"
           docker run --rm \
             -v "$PWD/infra/database/migrations:/migrations:ro" \
             -v "$PWD/infra/database/scripts:/scripts:ro" \
