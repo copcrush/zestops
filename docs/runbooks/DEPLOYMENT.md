@@ -38,11 +38,15 @@ goes to both Render services.
 1. Create a project (region close to the backends, e.g. Singapore), database `zestops`.
 2. Note the owner connection string (role `neondb_owner` or similar) — used only for
    bootstrap and migrations.
-3. Bootstrap schemas and least-privilege roles (choose three strong passwords):
+3. Bootstrap schemas and least-privilege roles (choose three strong passwords). From the
+   repository root, using Docker so no local `psql` is needed (works on Windows and macOS):
 
 ```bash
-psql "<OWNER_URL>?sslmode=require" -v web_app_password='...' -v payment_app_password='...' -v monitoring_app_password='...' -f infra/database/bootstrap/bootstrap.sql
+docker run --rm -v "$(pwd)/infra/database/bootstrap:/bootstrap:ro" postgres:17-alpine psql "<OWNER_URL>?sslmode=require" -v web_app_password='...' -v payment_app_password='...' -v monitoring_app_password='...' -f /bootstrap/bootstrap.sql
 ```
+
+   On Windows PowerShell replace `$(pwd)` with `${PWD}`. With a local `psql`, the same
+   command works without Docker (`-f infra/database/bootstrap/bootstrap.sql`).
 
 4. In GitHub → Settings → Environments → create `production` (optionally with required
    reviewers) and add secret `DATABASE_OWNER_URL` = owner URL with `?sslmode=require`.
