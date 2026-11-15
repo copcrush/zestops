@@ -1,0 +1,28 @@
+/** ZestOps mark: a citrus slice orbited by a small star (original artwork). */
+export function LogoMark({ className = "size-9" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
+      <circle cx="22" cy="26" r="17" fill="#C7E6A0" stroke="#141414" strokeWidth="3" />
+      <circle cx="22" cy="26" r="11" fill="#FFFCF2" stroke="#141414" strokeWidth="2" />
+      <g stroke="#141414" strokeWidth="2" strokeLinecap="round">
+        <line x1="22" y1="15" x2="22" y2="37" />
+        <line x1="11" y1="26" x2="33" y2="26" />
+        <line x1="14.2" y1="18.2" x2="29.8" y2="33.8" />
+        <line x1="29.8" y1="18.2" x2="14.2" y2="33.8" />
+      </g>
+      <path d="M40 3 L42 8 L47 10 L42 12 L40 17 L38 12 L33 10 L38 8 Z" fill="#C4B5FF" stroke="#141414"
+            strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function Logo() {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <LogoMark />
+      <span className="text-xl font-bold tracking-tight">
+        Zest<span className="rounded-md border-2 border-ink bg-lime px-1">Ops</span>
+      </span>
+    </span>
+  );
+}

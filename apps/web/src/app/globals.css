@@ -1,0 +1,79 @@
+@import "tailwindcss";
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/jetbrains-mono";
+
+/*
+ * ZestOps design tokens — "Playful Neobrutalism".
+ * Thick ink borders, hard offset shadows, flat fresh colors.
+ *   lime   (#C7E6A0) primary, fresh like Lemonade
+ *   nova   violet accents, cosmic like Supernova
+ *   sky    electric accents, sharp like Whiplash
+ */
+@theme {
+  --color-lime: #c7e6a0;
+  --color-lime-strong: #9fd067;
+  --color-lime-soft: #eef8e2;
+  --color-ink: #141414;
+  --color-paper: #fffcf2;
+  --color-mist: #f1efe6;
+  --color-muted: #55554f;
+  --color-lemon: #ffe66d;
+  --color-lemon-soft: #fff6c4;
+  --color-nova: #c4b5ff;
+  --color-nova-strong: #6d4cff;
+  --color-sky: #a5dcff;
+  --color-coral: #ff9b8f;
+  --color-coral-soft: #ffe1dc;
+  --color-coral-strong: #c4281c;
+
+  --font-sans: "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+  --shadow-brutal-sm: 2px 2px 0 0 var(--color-ink);
+  --shadow-brutal: 4px 4px 0 0 var(--color-ink);
+  --shadow-brutal-lg: 6px 6px 0 0 var(--color-ink);
+
+  --radius-brutal: 10px;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    background-color: var(--color-paper);
+    /* Subtle "star field" dot grid. */
+    background-image: radial-gradient(color-mix(in srgb, var(--color-ink) 13%, transparent) 1px, transparent 1px);
+    background-size: 22px 22px;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-nova-strong);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-lemon);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility brutal-border {
+  border: 2px solid var(--color-ink);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
