@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "users:create": "node --env-file-if-exists=.env.local scripts/create-user.mjs",
-    "setup:production": "node scripts/setup-production.mjs"
+    "setup:production": "node scripts/setup-production.mjs",
+    "setup:production:apply": "node scripts/apply-production-setup.mjs"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.3.0",

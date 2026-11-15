@@ -54,11 +54,25 @@ display name) and writes **`.secrets/production-setup.txt`** (git-ignored). It c
 
 Then:
 
-1. **STEP A:** Neon Console → SQL Editor → paste → **Run**.
+1. **STEP A** (recommended way — uses exactly the same connection as the GitHub secret,
+   so it cannot land in the wrong Neon branch or database):
+
+   ```bash
+   npm run setup:production:apply -- A
+   ```
+
+   It must print `4 of 4 schemas exist`. (Alternative: Neon SQL Editor, after checking that
+   `SELECT current_database();` shows the database from your connection string.)
 2. **STEP B:** GitHub → Settings → Environments → **New environment** `production` →
    **Add environment secret** `DATABASE_OWNER_URL`. Then Actions → **Database migrate** →
    **Run workflow** → environment `production`, command `up`. Wait for the green check.
-3. **STEP C:** Neon SQL Editor → paste → **Run** (shows two users: admin and viewer).
+3. **STEP C** (after step B is green):
+
+   ```bash
+   npm run setup:production:apply -- C
+   ```
+
+   It lists two users: your admin account and `guest@zestops.demo` (viewer).
 4. Copy everything into a password manager and **delete** `.secrets/production-setup.txt`.
 
 Notes:
